@@ -91,7 +91,6 @@ const isModeToggleDisabled = computed(() => {
         </div>
       </div>
     </div>
-    <AppFooter />
   </main>
 </template>
 
