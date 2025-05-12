@@ -971,53 +971,6 @@ const updateDataFromModal = (newData: string) => {
               </svg>
               <p>{{ t('Copy QR Code to clipboard') }}</p>
             </button>
-            <button
-              id="save-qr-code-config-button"
-              class="button flex w-fit max-w-full flex-row items-center gap-1"
-              @click="downloadQRConfig"
-              :title="t('Save QR Code configuration')"
-              :aria-label="t('Save QR Code configuration')"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-                <g
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                >
-                  <path d="M14 3v4a1 1 0 0 0 1 1h4" />
-                  <path
-                    d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2zm-5-4v-6"
-                  />
-                  <path d="M9.5 13.5L12 11l2.5 2.5" />
-                </g>
-              </svg>
-              <p>{{ t('Save QR Code configuration') }}</p>
-            </button>
-            <button
-              id="load-qr-code-config-button"
-              class="button flex w-fit max-w-full flex-row items-center gap-1"
-              @click="loadQrConfigFromFile"
-              :aria-label="t('Load QR Code configuration')"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-                <g
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                >
-                  <path d="M14 3v4a1 1 0 0 0 1 1h4" />
-                  <path
-                    d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2zm-5-10v6"
-                  />
-                  <path d="M9.5 13.5L12 11l2.5 2.5" />
-                </g>
-              </svg>
-              <p>{{ t('Load QR Code configuration') }}</p>
-            </button>
           </div>
           <div id="export-options" class="grid place-items-center gap-4">
             <p class="text-zinc-900 dark:text-zinc-100">{{ t('Export as') }}</p>
@@ -1597,43 +1550,6 @@ const updateDataFromModal = (newData: string) => {
                 </div>
               </div>
               <div class="w-full">
-                <div class="mb-2 flex flex-row items-center gap-2">
-                  <label for="image-url">
-                    {{ t('Logo image URL') }}
-                  </label>
-                  <button class="icon-button flex flex-row items-center" @click="uploadImage">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                    >
-                      <g
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                      >
-                        <path d="M14 3v4a1 1 0 0 0 1 1h4" />
-                        <path
-                          d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2zm-5-10v6"
-                        />
-                        <path d="M9.5 13.5L12 11l2.5 2.5" />
-                      </g>
-                    </svg>
-                    <span>{{ t('Upload image') }}</span>
-                  </button>
-                </div>
-                <textarea
-                  name="image-url"
-                  class="text-input"
-                  id="image-url"
-                  rows="1"
-                  :placeholder="t('Logo image URL')"
-                  v-model="image"
-                />
-              </div>
               <div class="flex flex-row items-center gap-2">
                 <label for="with-background">
                   {{ t('With background') }}
