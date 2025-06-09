@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CopyImageModal from '@/components/CopyImageModal.vue'
 import DataTemplatesModal from '@/components/DataTemplatesModal.vue'
 import QRCodeFrame from '@/components/QRCodeFrame.vue'
 import StyledQRCode from '@/components/StyledQRCode.vue'
@@ -25,7 +26,8 @@ import {
 import { parseCSV, validateCSVData } from '@/utils/csv'
 import { generateVCardData } from '@/utils/dataEncoding'
 import { getNumericCSSValue } from '@/utils/formatting'
-import { allPresets, type Preset } from '@/utils/presets'
+import { allQrCodePresets, defaultPreset, type Preset } from '@/utils/qrCodePresets'
+import { allFramePresets, defaultFramePreset, type FramePreset } from '@/utils/framePresets'
 import { useMediaQuery } from '@vueuse/core'
 import JSZip from 'jszip'
 import {
@@ -35,7 +37,7 @@ import {
   type ErrorCorrectionLevel,
   type Options as StyledQRCodeProps
 } from 'qr-code-styling'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch, nextTick } from 'vue'
 import 'vue-i18n'
 import { useI18n } from 'vue-i18n'
 
@@ -54,14 +56,29 @@ const props = defineProps<{
 
 const mainContentContainer = ref<HTMLElement | null>(null)
 const isLarge = useMediaQuery('(min-width: 768px)')
+const isLikelyMobileDevice = computed(() => {
+  return typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0
+})
 
 //#region /** locale */
 const { t } = useI18n()
 //#endregion
 
 //#region /* QR code style settings */
-const defaultPreset = allPresets[0]
-const data = ref(props.initialData || '')
+const data = ref(props.initialData || import.meta.env.VITE_DEFAULT_DATA_TO_ENCODE || '')
+const debouncedData = ref(data.value)
+let dataDebounceTimer: ReturnType<typeof setTimeout>
+
+watch(
+  data,
+  (newVal) => {
+    clearTimeout(dataDebounceTimer)
+    dataDebounceTimer = setTimeout(() => {
+      debouncedData.value = newVal
+    }, 500)
+  },
+  { immediate: true }
+)
 const image = ref()
 const width = ref()
 const height = ref()
@@ -127,7 +144,7 @@ const qrOptions = computed(() => ({
 }))
 
 const qrCodeProps = computed<StyledQRCodeProps>(() => ({
-  data: data.value || 'Have a beautiful day!',
+  data: debouncedData.value || 'Have a beautiful day!',
   image: image.value,
   width: width.value,
   height: height.value,
@@ -189,8 +206,8 @@ function uploadImage() {
 const isPresetSelectOpen = ref(false)
 const allPresetOptions = computed(() => {
   const options = lastCustomLoadedPreset.value
-    ? [lastCustomLoadedPreset.value, ...allPresets]
-    : allPresets
+    ? [lastCustomLoadedPreset.value, ...allQrCodePresets]
+    : allQrCodePresets
   return options.map((preset) => ({ value: preset.name, label: t(preset.name) }))
 })
 const selectedPreset = ref<
@@ -202,7 +219,7 @@ watch(selectedPreset, () => {
     data.value = selectedPreset.value.data
   }
 
-  image.value = 'data:image/png;base64,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'
+  image.value = selectedPreset.value.image
   width.value = selectedPreset.value.width
   height.value = selectedPreset.value.height
   margin.value = selectedPreset.value.margin
@@ -226,19 +243,29 @@ watch(selectedPreset, () => {
 const LAST_LOADED_LOCALLY_PRESET_KEY = 'Last saved locally'
 const LOADED_FROM_FILE_PRESET_KEY = 'Loaded from file'
 const CUSTOM_LOADED_PRESET_KEYS = [LAST_LOADED_LOCALLY_PRESET_KEY, LOADED_FROM_FILE_PRESET_KEY]
-const selectedPresetKey = ref<string>(LAST_LOADED_LOCALLY_PRESET_KEY)
+const selectedPresetKey = ref<string>(
+  import.meta.env.VITE_DISABLE_LOCAL_STORAGE === 'true'
+    ? defaultPreset.name
+    : localStorage.getItem('qrCodeConfig')
+      ? LAST_LOADED_LOCALLY_PRESET_KEY
+      : defaultPreset.name
+)
 const lastCustomLoadedPreset = ref<Preset>()
 watch(
   selectedPresetKey,
   (newKey, prevKey) => {
     if (newKey === prevKey || !newKey) return
 
-    if (CUSTOM_LOADED_PRESET_KEYS.includes(newKey) && lastCustomLoadedPreset.value) {
+    if (
+      import.meta.env.VITE_DISABLE_LOCAL_STORAGE !== 'true' &&
+      CUSTOM_LOADED_PRESET_KEYS.includes(newKey) &&
+      lastCustomLoadedPreset.value
+    ) {
       selectedPreset.value = lastCustomLoadedPreset.value
       return
     }
 
-    const updatedPreset = allPresets.find((preset) => preset.name === newKey)
+    const updatedPreset = allQrCodePresets.find((preset) => preset.name === newKey)
     if (updatedPreset) {
       selectedPreset.value = updatedPreset
     }
@@ -283,6 +310,47 @@ const frameStyle = ref<FrameStyle>({
   borderRadius: '8px',
   padding: '16px'
 })
+const selectedFramePresetKey = ref<string>(defaultFramePreset.name)
+const lastCustomLoadedFramePreset = ref<FramePreset>()
+const CUSTOM_LOADED_FRAME_PRESET_KEYS = [
+  LAST_LOADED_LOCALLY_PRESET_KEY,
+  LOADED_FROM_FILE_PRESET_KEY
+]
+const allFramePresetOptions = computed(() => {
+  const options = lastCustomLoadedFramePreset.value
+    ? [lastCustomLoadedFramePreset.value, ...allFramePresets]
+    : allFramePresets
+  return options.map((preset) => ({ value: preset.name, label: t(preset.name) }))
+})
+function applyFramePreset(preset: FramePreset) {
+  if (preset.style) {
+    frameStyle.value = { ...frameStyle.value, ...preset.style }
+  }
+  if (preset.text) frameText.value = preset.text
+  if (preset.position) frameTextPosition.value = preset.position
+  showFrame.value = true
+}
+watch(
+  selectedFramePresetKey,
+  (newKey, prevKey) => {
+    if (newKey === prevKey || !newKey) return
+
+    if (
+      import.meta.env.VITE_DISABLE_LOCAL_STORAGE !== 'true' &&
+      CUSTOM_LOADED_FRAME_PRESET_KEYS.includes(newKey) &&
+      lastCustomLoadedFramePreset.value
+    ) {
+      applyFramePreset(lastCustomLoadedFramePreset.value)
+      return
+    }
+
+    const preset = allFramePresets.find((p) => p.name === newKey)
+    if (preset) {
+      applyFramePreset(preset)
+    }
+  },
+  { immediate: true }
+)
 const frameSettings = computed(() => ({
   text: frameText.value,
   position: frameTextPosition.value,
@@ -333,12 +401,47 @@ function getExportDimensions() {
   }
 }
 
-async function copyQRToClipboard() {
+// #region Copy image modal (Safari fallback)
+const showSafariCopyImageModal = ref(false)
+const copyModalIsLoading = ref(false)
+const copyModalImageSrc = ref<string | null>(null)
+
+async function openCopyModal() {
+  const el = document.getElementById('element-to-export')
+  if (!el) return
+  copyModalIsLoading.value = true
+  try {
+    copyModalImageSrc.value = await getPngElement(
+      el,
+      getExportDimensions(),
+      styledBorderRadiusFormatted.value
+    )
+    showSafariCopyImageModal.value = true
+  } catch (error) {
+    console.error('Error preparing image for copy modal:', error)
+  } finally {
+    copyModalIsLoading.value = false
+  }
+}
+
+function closeCopyModal() {
+  showSafariCopyImageModal.value = false
+  copyModalImageSrc.value = null
+}
+// #endregion
+
+function copyQRToClipboard() {
   const el = document.getElementById('element-to-export')
   if (!el) {
     return
   }
-  await copyImageToClipboard(el, getExportDimensions())
+  if (IS_COPY_IMAGE_TO_CLIPBOARD_SUPPORTED) {
+    copyImageToClipboard(el, getExportDimensions(), styledBorderRadiusFormatted.value)
+  } else if (!isLikelyMobileDevice.value) {
+    // for now we only open the copy image modal on safari desktop because
+    // this modal will be hidden behind the export image modal on mobile viewport.
+    openCopyModal()
+  }
 }
 
 /**
@@ -429,6 +532,8 @@ function loadQRConfig(jsonString: string, key?: string) {
     selectedPresetKey.value = key
   }
 
+  let framePreset: FramePreset | undefined
+
   selectedPreset.value = preset
 
   if (frameConfig) {
@@ -439,6 +544,17 @@ function loadQRConfig(jsonString: string, key?: string) {
       ...frameStyle.value,
       ...frameConfig.style
     }
+    framePreset = {
+      name: key || LAST_LOADED_LOCALLY_PRESET_KEY,
+      style: frameConfig.style,
+      text: frameConfig.text,
+      position: frameConfig.position
+    }
+  }
+
+  if (framePreset && key) {
+    lastCustomLoadedFramePreset.value = framePreset
+    selectedFramePresetKey.value = key
   }
 }
 
@@ -484,7 +600,23 @@ watch(
 )
 
 onMounted(() => {
-  loadQRConfigFromLocalStorage()
+  if (import.meta.env.VITE_DISABLE_LOCAL_STORAGE !== 'true') {
+    const qrCodeConfigString = localStorage.getItem('qrCodeConfig')
+    if (qrCodeConfigString) {
+      loadQRConfig(qrCodeConfigString, LAST_LOADED_LOCALLY_PRESET_KEY)
+    } else {
+      // No localStorage data found, use the environment variable default preset
+      selectedPreset.value = { ...defaultPreset }
+      selectedPresetKey.value = defaultPreset.name
+    }
+    // No separate frameConfig loading from localStorage noted,
+    // assuming selectedFramePresetKey watcher handles it if lastCustomLoadedFramePreset was populated by loadQRConfig
+  }
+
+  // Set initial data if provided through props
+  if (props.initialData) {
+    data.value = props.initialData
+  }
 })
 //#endregion
 
@@ -497,17 +629,10 @@ enum ExportMode {
 const exportMode = ref(ExportMode.Single)
 const dataStringsFromCsv = ref<string[]>([])
 const frameTextsFromCsv = ref<string[]>([])
-const filteredDataStringsFromCsv = computed(() =>
-  ignoreCsvHeaderRow.value ? dataStringsFromCsv.value.slice(1) : dataStringsFromCsv.value
-)
-const filteredFrameTextsFromCsv = computed(() =>
-  ignoreCsvHeaderRow.value ? frameTextsFromCsv.value.slice(1) : frameTextsFromCsv.value
-)
 
 const inputFileForBatchEncoding = ref<File | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const isValidCsv = ref(true)
-const ignoreCsvHeaderRow = ref(true)
 
 const isExportingBatchQRs = ref(false)
 const isBatchExportSuccess = ref(false)
@@ -516,7 +641,7 @@ const currentExportedQrCodeIndex = ref<number | null>(null)
 const parsedCsvResult = ref<{ data: any[] } | null>(null)
 const previewRowIndex = ref(0)
 const previewRow = computed(() => {
-  const idx = ignoreCsvHeaderRow.value ? previewRowIndex.value + 1 : previewRowIndex.value
+  const idx = previewRowIndex.value
   if (dataStringsFromCsv.value.length === 0) return null
   if (idx < 0 || idx >= dataStringsFromCsv.value.length) return null
   if (
@@ -579,7 +704,7 @@ const onBatchInputFileUpload = (event: Event) => {
       return
     }
 
-    const result = parseCSV(content, ignoreCsvHeaderRow.value)
+    const result = parseCSV(content)
     parsedCsvResult.value = result
     if (!result.isValid) {
       isValidCsv.value = false
@@ -603,9 +728,9 @@ const onBatchInputFileUpload = (event: Event) => {
           lastName: row.lastName,
           org: row.org,
           position: row.position,
-          phoneWork: row.phoneWork,
-          phonePrivate: row.phonePrivate,
-          phoneMobile: row.phoneMobile,
+          phoneWork: row.phonework,
+          phonePrivate: row.phoneprivate,
+          phoneMobile: row.phonemobile,
           email: row.email,
           website: row.website,
           street: row.street,
@@ -648,8 +773,8 @@ const createZipFile = (
   index: number,
   format: 'png' | 'svg' | 'jpg'
 ) => {
-  const dataString = filteredDataStringsFromCsv.value[index]
-  const frameText = filteredFrameTextsFromCsv.value[index]
+  const dataString = dataStringsFromCsv.value[index]
+  const frameText = frameTextsFromCsv.value[index]
   let fileName = ''
 
   // If frame text is provided, use it as the filename
@@ -706,10 +831,10 @@ async function generateBatchQRCodes(format: 'png' | 'svg' | 'jpg') {
   }
 
   try {
-    for (let index = 0; index < filteredDataStringsFromCsv.value.length; index++) {
+    for (let index = 0; index < dataStringsFromCsv.value.length; index++) {
       currentExportedQrCodeIndex.value = index
-      const url = filteredDataStringsFromCsv.value[index]
-      const currentFrameText = filteredFrameTextsFromCsv.value[index]
+      const url = dataStringsFromCsv.value[index]
+      const currentFrameText = frameTextsFromCsv.value[index]
       data.value = url
       frameText.value = currentFrameText
       await sleep(1000)
@@ -725,7 +850,7 @@ async function generateBatchQRCodes(format: 'png' | 'svg' | 'jpg') {
       numQrCodesCreated++
     }
 
-    while (numQrCodesCreated !== filteredDataStringsFromCsv.value.length) {
+    while (numQrCodesCreated !== dataStringsFromCsv.value.length) {
       await sleep(100)
     }
 
@@ -743,10 +868,10 @@ async function generateBatchQRCodes(format: 'png' | 'svg' | 'jpg') {
     resetBatchExportProgress()
   }
 }
-//#endregion
+// #endregion
 
+//#region /* Data modal */
 const isDataModalVisible = ref(false)
-
 const openDataModal = () => {
   isDataModalVisible.value = true
 }
@@ -759,11 +884,55 @@ const updateDataFromModal = (newData: string) => {
   data.value = newData
   // Optionally trigger QR code regeneration here if needed
 }
+// #endregion
+
+//#region /* Dynamic padding for mobile drawer */
+const drawerTriggerHeight = ref(0)
+const BUFFER_PADDING = 20 // Extra space below the drawer trigger
+
+function updateDrawerTriggerHeight() {
+  nextTick(() => {
+    const el = document.getElementById('drawer-preview-container')
+    if (el) {
+      drawerTriggerHeight.value = el.offsetHeight
+    } else {
+      drawerTriggerHeight.value = 0 // Fallback if element not found
+    }
+  })
+}
+
+watch(
+  isLarge,
+  (newIsLarge) => {
+    if (!newIsLarge) {
+      updateDrawerTriggerHeight() // Drawer is now visible
+    } else {
+      drawerTriggerHeight.value = 0 // Drawer is hidden, reset padding effect
+    }
+  },
+  { immediate: true } // Run on initial load
+)
+
+// Watch for changes that might affect the drawer trigger's height
+watch(showFrame, () => {
+  if (!isLarge.value) {
+    updateDrawerTriggerHeight()
+  }
+})
+
+const mainDivPaddingStyle = computed(() => {
+  if (!isLarge.value && drawerTriggerHeight.value > 0) {
+    return { paddingBottom: `${drawerTriggerHeight.value + BUFFER_PADDING}px` }
+  }
+  return { paddingBottom: '0px' } // Default for large screens or if height is 0
+})
+//#endregion
 </script>
 
 <template>
   <div
-    class="flex items-start justify-center gap-4 pb-[180px] md:flex-row md:gap-6 lg:gap-12 lg:pb-0"
+    class="flex items-start justify-center gap-4 md:flex-row md:gap-6 lg:gap-12 lg:pb-0"
+    :style="mainDivPaddingStyle"
   >
     <!-- Sticky sidebar on large screens -->
     <div
@@ -945,7 +1114,7 @@ const updateDataFromModal = (newData: string) => {
         <div class="mt-4 flex flex-col items-center gap-8">
           <div class="flex flex-col items-center justify-center gap-3">
             <button
-              v-if="IS_COPY_IMAGE_TO_CLIPBOARD_SUPPORTED && exportMode !== ExportMode.Batch"
+              v-if="exportMode !== ExportMode.Batch"
               id="copy-qr-image-button"
               class="button flex w-fit max-w-full flex-row items-center gap-1"
               @click="copyQRToClipboard"
@@ -970,6 +1139,53 @@ const updateDataFromModal = (newData: string) => {
                 </g>
               </svg>
               <p>{{ t('Copy QR Code to clipboard') }}</p>
+            </button>
+            <button
+              id="save-qr-code-config-button"
+              class="button flex w-fit max-w-full flex-row items-center gap-1"
+              @click="downloadQRConfig"
+              :title="t('Save QR Code configuration')"
+              :aria-label="t('Save QR Code configuration')"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+                <g
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                >
+                  <path d="M14 3v4a1 1 0 0 0 1 1h4" />
+                  <path
+                    d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2zm-5-4v-6"
+                  />
+                  <path d="M9.5 13.5L12 11l2.5 2.5" />
+                </g>
+              </svg>
+              <p>{{ t('Save QR Code configuration') }}</p>
+            </button>
+            <button
+              id="load-qr-code-config-button"
+              class="button flex w-fit max-w-full flex-row items-center gap-1"
+              @click="loadQrConfigFromFile"
+              :aria-label="t('Load QR Code configuration')"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+                <g
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                >
+                  <path d="M14 3v4a1 1 0 0 0 1 1h4" />
+                  <path
+                    d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2zm-5-10v6"
+                  />
+                  <path d="M9.5 13.5L12 11l2.5 2.5" />
+                </g>
+              </svg>
+              <p>{{ t('Load QR Code configuration') }}</p>
             </button>
           </div>
           <div id="export-options" class="grid place-items-center gap-4">
@@ -1082,7 +1298,7 @@ const updateDataFromModal = (newData: string) => {
           <AccordionTrigger
             class="button !px-4 text-2xl text-gray-700 outline-none dark:text-gray-100 md:!px-6 lg:!px-8"
             ><span class="flex flex-row items-center gap-2"
-              ><span>{{ t('Frame settings') }}</span>
+              ><span id="frame-settings-title">{{ t('Frame settings') }}</span>
               <span
                 class="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-zinc-800 dark:bg-zinc-700 dark:text-zinc-200"
               >
@@ -1091,127 +1307,141 @@ const updateDataFromModal = (newData: string) => {
             ></AccordionTrigger
           >
           <AccordionContent class="px-2 pb-8 pt-4">
-            <div class="space-y-4">
+            <section class="space-y-4" aria-labelledby="frame-settings-title">
               <div class="flex flex-row items-center gap-2">
                 <label for="show-frame">{{ t('Add frame') }}</label>
                 <input id="show-frame" type="checkbox" v-model="showFrame" />
               </div>
 
-              <div v-if="showFrame">
-                <div class="mb-2 flex flex-row items-center gap-2">
-                  <label for="frame-text">{{ t('Frame text') }}</label>
-                </div>
-                <textarea
-                  name="frame-text"
-                  class="text-input"
-                  id="frame-text"
-                  rows="2"
-                  :placeholder="t('Scan for more info')"
-                  v-model="frameText"
-                />
-              </div>
-
-              <div v-if="showFrame">
-                <label class="mb-2 block">{{ t('Text position') }}</label>
-                <fieldset class="flex-1" role="radio" tabindex="0">
-                  <div
-                    class="radio"
-                    v-for="position in ['top', 'bottom', 'right', 'left']"
-                    :key="position"
-                  >
-                    <input
-                      :id="'frameTextPosition-' + position"
-                      type="radio"
-                      v-model="frameTextPosition"
-                      :value="position"
-                    />
-                    <label :for="'frameTextPosition-' + position">{{ t(position) }}</label>
-                  </div>
-                </fieldset>
-              </div>
-
-              <div v-if="showFrame">
-                <label class="mb-2 block">{{ t('Frame style') }}</label>
-                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div>
-                    <label for="frame-text-color" class="mb-1 block text-sm">{{
-                      t('Text color')
-                    }}</label>
-                    <input
-                      id="frame-text-color"
-                      type="color"
-                      class="color-input"
-                      v-model="frameStyle.textColor"
-                    />
-                  </div>
-                  <div>
-                    <label for="frame-bg-color" class="mb-1 block text-sm">{{
-                      t('Background color')
-                    }}</label>
-                    <input
-                      id="frame-bg-color"
-                      type="color"
-                      class="color-input"
-                      v-model="frameStyle.backgroundColor"
-                    />
-                  </div>
-                  <div>
-                    <label for="frame-border-color" class="mb-1 block text-sm">{{
-                      t('Border color')
-                    }}</label>
-                    <input
-                      id="frame-border-color"
-                      type="color"
-                      class="color-input"
-                      v-model="frameStyle.borderColor"
-                    />
-                  </div>
-                  <div>
-                    <label for="frame-border-width" class="mb-1 block text-sm">{{
-                      t('Border width')
-                    }}</label>
-                    <input
-                      id="frame-border-width"
-                      type="text"
-                      class="text-input"
-                      v-model="frameStyle.borderWidth"
-                      placeholder="1px"
-                    />
-                  </div>
-                  <div>
-                    <label for="frame-border-radius" class="mb-1 block text-sm">{{
-                      t('Border radius')
-                    }}</label>
-                    <input
-                      id="frame-border-radius"
-                      type="text"
-                      class="text-input"
-                      v-model="frameStyle.borderRadius"
-                      placeholder="8px"
-                    />
-                  </div>
-                  <div>
-                    <label for="frame-padding" class="mb-1 block text-sm">{{ t('Padding') }}</label>
-                    <input
-                      id="frame-padding"
-                      type="text"
-                      class="text-input"
-                      v-model="frameStyle.padding"
-                      placeholder="16px"
+              <template v-if="showFrame">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:gap-8">
+                  <div class="flex flex-col sm:w-1/2">
+                    <label>{{ t('Frame preset') }}</label>
+                    <Combobox
+                      :items="allFramePresetOptions"
+                      v-model:value="selectedFramePresetKey"
+                      :button-label="t('Select frame preset')"
                     />
                   </div>
                 </div>
-              </div>
-            </div>
+                <div class="flex flex-col">
+                  <label class="mb-2 block">{{ t('Text position') }}</label>
+                  <fieldset class="flex-1" role="radio" tabindex="0">
+                    <div
+                      class="radio"
+                      v-for="position in ['top', 'bottom', 'right', 'left']"
+                      :key="position"
+                    >
+                      <input
+                        :id="'frameTextPosition-' + position"
+                        type="radio"
+                        v-model="frameTextPosition"
+                        :value="position"
+                      />
+                      <label :for="'frameTextPosition-' + position">{{ t(position) }}</label>
+                    </div>
+                  </fieldset>
+                </div>
+
+                <div>
+                  <div class="mb-2 flex flex-row items-center gap-2">
+                    <label for="frame-text">{{ t('Frame text') }}</label>
+                  </div>
+                  <textarea
+                    name="frame-text"
+                    class="text-input"
+                    id="frame-text"
+                    rows="2"
+                    :placeholder="t('Scan for more info')"
+                    v-model="frameText"
+                  />
+                </div>
+
+                <div>
+                  <label class="mb-2 block">{{ t('Frame style') }}</label>
+                  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <label for="frame-text-color" class="mb-1 block text-sm">{{
+                        t('Text color')
+                      }}</label>
+                      <input
+                        id="frame-text-color"
+                        type="color"
+                        class="color-input"
+                        v-model="frameStyle.textColor"
+                      />
+                    </div>
+                    <div>
+                      <label for="frame-bg-color" class="mb-1 block text-sm">{{
+                        t('Background color')
+                      }}</label>
+                      <input
+                        id="frame-bg-color"
+                        type="color"
+                        class="color-input"
+                        v-model="frameStyle.backgroundColor"
+                      />
+                    </div>
+                    <div>
+                      <label for="frame-border-color" class="mb-1 block text-sm">{{
+                        t('Border color')
+                      }}</label>
+                      <input
+                        id="frame-border-color"
+                        type="color"
+                        class="color-input"
+                        v-model="frameStyle.borderColor"
+                      />
+                    </div>
+                    <div>
+                      <label for="frame-border-width" class="mb-1 block text-sm">{{
+                        t('Border width')
+                      }}</label>
+                      <input
+                        id="frame-border-width"
+                        type="text"
+                        class="text-input"
+                        v-model="frameStyle.borderWidth"
+                        placeholder="1px"
+                      />
+                    </div>
+                    <div>
+                      <label for="frame-border-radius" class="mb-1 block text-sm">{{
+                        t('Border radius')
+                      }}</label>
+                      <input
+                        id="frame-border-radius"
+                        type="text"
+                        class="text-input"
+                        v-model="frameStyle.borderRadius"
+                        placeholder="8px"
+                      />
+                    </div>
+                    <div>
+                      <label for="frame-padding" class="mb-1 block text-sm">{{
+                        t('Padding')
+                      }}</label>
+                      <input
+                        id="frame-padding"
+                        type="text"
+                        class="text-input"
+                        v-model="frameStyle.padding"
+                        placeholder="16px"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </section>
           </AccordionContent>
         </AccordionItem>
         <AccordionItem value="qr-code-settings">
           <AccordionTrigger
             class="button !px-4 text-2xl text-gray-700 outline-none dark:text-gray-100 md:!px-6 lg:!px-8"
-            >{{ t('QR code settings') }}</AccordionTrigger
+            ><span id="qr-code-settings-title">{{ t('QR code settings') }}</span></AccordionTrigger
           >
           <AccordionContent class="px-2 pb-8 pt-4">
-            <div class="space-y-8">
+            <section class="space-y-8" aria-labelledby="qr-code-settings-title">
               <div>
                 <label>{{ t('Preset') }}</label>
                 <div class="flex flex-row items-center justify-start gap-2">
@@ -1219,18 +1449,18 @@ const updateDataFromModal = (newData: string) => {
                     :items="allPresetOptions"
                     v-model:value="selectedPresetKey"
                     v-model:open="isPresetSelectOpen"
-                    :button-label="t('Select preset')"
+                    :button-label="t('Select QR code preset')"
                     :insert-divider-at-indexes="[0, 2]"
                   />
                   <button
-                    class="button"
+                    class="button grid size-10 place-items-center"
                     @click="randomizeStyleSettings"
                     :aria-label="t('Randomize style')"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
-                      width="40"
-                      height="32"
+                      width="24"
+                      height="24"
                       viewBox="0 0 640 512"
                     >
                       <path
@@ -1275,18 +1505,7 @@ const updateDataFromModal = (newData: string) => {
                             'flex grow items-center justify-end gap-2',
                             dataStringsFromCsv.length > 0 && 'opacity-80'
                           ]"
-                        >
-                          <label for="ignore-csv-header-row" class="!text-sm !font-normal">
-                            {{ $t('Ignore header row') }}
-                          </label>
-                          <input
-                            id="ignore-csv-header-row"
-                            type="checkbox"
-                            class="checkbox me-2"
-                            v-model="ignoreCsvHeaderRow"
-                            @change="onBatchInputFileUpload($event)"
-                          />
-                        </div>
+                        ></div>
                       </div>
                     </div>
                     <!-- Single Mode Input -->
@@ -1412,7 +1631,7 @@ const updateDataFromModal = (newData: string) => {
                           </button>
                         </div>
                         <div v-else-if="currentExportedQrCodeIndex == null && !isExportingBatchQRs">
-                          <div v-if="filteredDataStringsFromCsv.length > 0" class="mt-4">
+                          <div v-if="dataStringsFromCsv.length > 0" class="mt-4">
                             <div
                               class="flex flex-col gap-2 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800"
                             >
@@ -1429,11 +1648,7 @@ const updateDataFromModal = (newData: string) => {
                                     <code
                                       class="rounded bg-white px-2 py-1 font-mono text-sm dark:bg-gray-900"
                                     >
-                                      {{
-                                        ignoreCsvHeaderRow
-                                          ? dataStringsFromCsv[previewRowIndex + 1]
-                                          : dataStringsFromCsv[previewRowIndex]
-                                      }}
+                                      {{ dataStringsFromCsv[previewRowIndex] }}
                                     </code>
                                   </div>
                                   <div v-if="frameTextsFromCsv.length > 0">
@@ -1444,11 +1659,7 @@ const updateDataFromModal = (newData: string) => {
                                     <code
                                       class="rounded bg-white px-2 py-1 font-mono text-sm dark:bg-gray-900"
                                     >
-                                      {{
-                                        ignoreCsvHeaderRow
-                                          ? frameTextsFromCsv[previewRowIndex + 1]
-                                          : frameTextsFromCsv[previewRowIndex]
-                                      }}
+                                      {{ frameTextsFromCsv[previewRowIndex + 1] }}
                                     </code>
                                   </div>
                                 </div>
@@ -1462,14 +1673,11 @@ const updateDataFromModal = (newData: string) => {
                                   &lt;
                                 </button>
                                 <span class="text-xs text-gray-500 dark:text-gray-400"
-                                  >{{ previewRowIndex + 1 }} /
-                                  {{ filteredDataStringsFromCsv.length }}</span
+                                  >{{ previewRowIndex + 1 }} / {{ dataStringsFromCsv.length }}</span
                                 >
                                 <button
                                   class="rounded bg-gray-200 px-2 py-1 text-gray-700 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-200 dark:disabled:opacity-60"
-                                  :disabled="
-                                    previewRowIndex === filteredDataStringsFromCsv.length - 1
-                                  "
+                                  :disabled="previewRowIndex === dataStringsFromCsv.length - 1"
                                   @click="previewRowIndex++"
                                 >
                                   &gt;
@@ -1484,7 +1692,7 @@ const updateDataFromModal = (newData: string) => {
                             {{
                               $t('{index} / {count} QR codes have been created.', {
                                 index: currentExportedQrCodeIndex + 1,
-                                count: filteredDataStringsFromCsv.length
+                                count: dataStringsFromCsv.length
                               })
                             }}
                           </p>
@@ -1550,6 +1758,43 @@ const updateDataFromModal = (newData: string) => {
                 </div>
               </div>
               <div class="w-full">
+                <div class="mb-2 flex flex-row items-center gap-2">
+                  <label for="image-url">
+                    {{ t('Logo image URL') }}
+                  </label>
+                  <button class="icon-button flex flex-row items-center" @click="uploadImage">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                    >
+                      <g
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                      >
+                        <path d="M14 3v4a1 1 0 0 0 1 1h4" />
+                        <path
+                          d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2zm-5-10v6"
+                        />
+                        <path d="M9.5 13.5L12 11l2.5 2.5" />
+                      </g>
+                    </svg>
+                    <span>{{ t('Upload image') }}</span>
+                  </button>
+                </div>
+                <textarea
+                  name="image-url"
+                  class="text-input"
+                  id="image-url"
+                  rows="1"
+                  :placeholder="t('Logo image URL')"
+                  v-model="image"
+                />
+              </div>
               <div class="flex flex-row items-center gap-2">
                 <label for="with-background">
                   {{ t('With background') }}
@@ -1713,7 +1958,7 @@ const updateDataFromModal = (newData: string) => {
                   </div>
                 </fieldset>
               </div>
-            </div>
+            </section>
           </AccordionContent>
         </AccordionItem>
       </Accordion>
@@ -1725,5 +1970,13 @@ const updateDataFromModal = (newData: string) => {
     :initial-data="data"
     @close="closeDataModal"
     @update:data="updateDataFromModal"
+  />
+
+  <!-- Fallback modal for manual copy in Safari -->
+  <CopyImageModal
+    v-if="showSafariCopyImageModal"
+    :is-loading="copyModalIsLoading"
+    :image-src="copyModalImageSrc"
+    @close="closeCopyModal"
   />
 </template>
